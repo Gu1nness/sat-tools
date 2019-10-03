@@ -1,5 +1,4 @@
-/* Original Licence */
-// Copyright 2010-2017 Google
+// Copyright 2010-2018 Google LLC
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,10 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "sattools/Bitset.h"
+#include "Bitset.h"
 
-// DEFINE_int32(bitset_small_bitset_count, 8,
-//              "threshold to count bits with buckets");
+//#include "ortools/base/commandlineflags.h"
+#include "Logging.h"
+
+//DEFINE_int32(bitset_small_bitset_count, 8,
+//             "threshold to count bits with buckets");
 
 static const int FLAGS_bitset_small_bitset_count = 8;
 
@@ -253,4 +255,5 @@ UNSAFE_MOST_SIGNIFICANT_BIT_POSITION(64)
 UNSAFE_MOST_SIGNIFICANT_BIT_POSITION(32)
 
 #undef UNSAFE_MOST_SIGNIFICANT_BIT_POSITION
-}  // namespace sat
+
+}  // namespace operations_research

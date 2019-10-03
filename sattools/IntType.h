@@ -1,5 +1,4 @@
-/* Original Licence */
-// Copyright 2010-2017 Google
+// Copyright 2010-2018 Google LLC
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -35,8 +34,8 @@
 //
 //  where:
 //    IntTypeName: is the desired (unique) name for the "logical" integer type.
-//    ValueType: is one of the integral types:
-//       (int, int64, short, long, char, unsigned version).
+//    ValueType: is one of the integral types as defined by std::is_integral
+//               (see <type_traits>).
 //
 // DISALLOWED OPERATIONS / TYPE-SAFETY ENFORCEMENT -----------------------------
 //
@@ -69,8 +68,8 @@
 //    GetGlobalDoc(local);             <-- Fails to compile!
 //
 //    void GetLocalDoc(int32 local) { ...
-//    GetLocalDoc(global);            <-- Fails to compile!
-//    GetLocalDoc(local);             <-- Fails to compile!
+//    GetLocalDoc(global);             <-- Fails to compile!
+//    GetLocalDoc(local);              <-- Fails to compile!
 //
 //
 // SUPPORTED OPERATIONS --------------------------------------------------------
@@ -87,11 +86,11 @@
 // the stored value into protocol buffer fields and using it as printf args.
 //
 // The class also defines a hash functor that allows the IntType to be used
-// as key to hashable containers such as std::unordered_{map|set}.
+// as key to hashable containers such as hash_map and hash_set.
 //
-// We suggest using the IntTypeIndexedContainer wrapper around STL
-// std::vector (see int_type_indexed_std::vector.h) if an IntType is intended
-// to be used as an index into these containers.  These wrappers are
+// We suggest using the IntTypeIndexedContainer wrapper around google3's
+// FixedArray and STL vector (see int-type-indexed-container.h) if an IntType is
+// intended to be used as an index into these containers.  These wrappers are
 // indexed in a type-safe manner using IntTypes to ensure type-safety.
 //
 // NB: this implementation does not attempt to abide by or enforce dimensional
@@ -142,15 +141,28 @@
 //  void GetGlobalDoc(int64 global) { ...
 //  GetGlobalDoc(local.value());                  <-- Compiles fine.
 
-#ifndef SATTOOLS_INTTYPE_H_
-#define SATTOOLS_INTTYPE_H_
+#ifndef OR_TOOLS_BASE_INT_TYPE_H_
+#define OR_TOOLS_BASE_INT_TYPE_H_
+
+
+#if (defined(__GNUC__) && !defined(__clang__))
+#define ATTRIBUTE_PACKED __attribute__((__packed__))
+#else
+#define ATTRIBUTE_PACKED
+#endif
+
 
 #include <stddef.h>
-#include <unordered_map>
+
+#include <functional>
 #include <iosfwd>
 #include <ostream>  // NOLINT
+#include <type_traits>
+#include <unordered_map>
 
-#include "sattools/Macros.h"
+#include "Macros.h"
+
+namespace sat {
 
 template <typename IntTypeName, typename _ValueType>
 class IntType;
@@ -158,9 +170,11 @@ class IntType;
 // Defines the IntType using value_type and typedefs it to int_type_name.
 // The struct int_type_name ## _tag_ trickery is needed to ensure that a new
 // type is created per int_type_name.
-#define DEFINE_INT_TYPE(int_type_name, value_type) \
-  struct int_type_name##_tag_ {};                  \
-  typedef IntType<int_type_name##_tag_, value_type> int_type_name;
+#define DEFINE_INT_TYPE(int_type_name, value_type)                           \
+  struct int_type_name##_tag_ {                                              \
+    static constexpr std::string_view TypeName() { return #int_type_name; } \
+  };                                                                         \
+  typedef ::sat::IntType<int_type_name##_tag_, value_type> int_type_name;
 
 // Holds a integral value (of type ValueType) and behaves as a
 // ValueType by exposing assignment, unary, comparison, and arithmetic
@@ -178,21 +192,35 @@ class IntType {
   typedef _ValueType ValueType;                      // for non-member operators
   typedef IntType<IntTypeName, ValueType> ThisType;  // Syntactic sugar.
 
+  static constexpr std::string_view TypeName() {
+    return IntTypeName::TypeName();
+  }
+
+  // Note that this may change from time to time without notice.
+  struct Hasher {
+    size_t operator()(const IntType& arg) const {
+      return static_cast<size_t>(arg.value());
+    }
+  };
+
  public:
   // Default c'tor initializing value_ to 0.
-  IntType() : value_(0) {}
+  constexpr IntType() : value_(0) {}
   // C'tor explicitly initializing from a ValueType.
-  explicit IntType(ValueType value) : value_(value) {}
-  // IntType uses the default copy constructor and destructor.
+  constexpr explicit IntType(ValueType value) : value_(value) {}
+
+  // IntType uses the default copy constructor, destructor and assign operator.
+  // The defaults are sufficient and omitting them allows the compiler to add
+  // the move constructor/assignment.
 
   // -- ACCESSORS --------------------------------------------------------------
   // The class provides a value() accessor returning the stored ValueType value_
   // as well as a templatized accessor that is just a syntactic sugar for
   // static_cast<T>(var.value());
-  ValueType value() const { return value_; }
+  constexpr ValueType value() const { return value_; }
 
   template <typename ValType>
-  ValType value() const {
+  constexpr ValType value() const {
     return static_cast<ValType>(value_);
   }
 
@@ -201,7 +229,7 @@ class IntType {
     ++value_;
     return *this;
   }
-  const ThisType operator++(int v ATTRIBUTE_UNUSED) {  // postfix ++
+  const ThisType operator++(int v) {  // postfix ++
     ThisType temp(*this);
     ++value_;
     return temp;
@@ -210,20 +238,20 @@ class IntType {
     --value_;
     return *this;
   }
-  const ThisType operator--(int v ATTRIBUTE_UNUSED) {  // postfix --
+  const ThisType operator--(int v) {  // postfix --
     ThisType temp(*this);
     --value_;
     return temp;
   }
 
-  bool operator!() const { return value_ == 0; }
-  const ThisType operator+() const { return ThisType(value_); }
-  const ThisType operator-() const { return ThisType(-value_); }
-  const ThisType operator~() const { return ThisType(~value_); }
+  constexpr bool operator!() const { return value_ == 0; }
+  constexpr const ThisType operator+() const { return ThisType(value_); }
+  constexpr const ThisType operator-() const { return ThisType(-value_); }
+  constexpr const ThisType operator~() const { return ThisType(~value_); }
 
-// -- ASSIGNMENT OPERATORS ---------------------------------------------------
-// We support the following assignment operators: =, +=, -=, *=, /=, <<=, >>=
-// and %= for both ThisType and ValueType.
+  // -- ASSIGNMENT OPERATORS ---------------------------------------------------
+  // We support the following assignment operators: =, +=, -=, *=, /=, <<=, >>=
+  // and %= for both ThisType and ValueType.
 #define INT_TYPE_ASSIGNMENT_OP(op)                   \
   ThisType& operator op(const ThisType& arg_value) { \
     value_ op arg_value.value();                     \
@@ -233,7 +261,6 @@ class IntType {
     value_ op arg_value;                             \
     return *this;                                    \
   }
-  INT_TYPE_ASSIGNMENT_OP(=);
   INT_TYPE_ASSIGNMENT_OP(+=);
   INT_TYPE_ASSIGNMENT_OP(-=);
   INT_TYPE_ASSIGNMENT_OP(*=);
@@ -243,10 +270,18 @@ class IntType {
   INT_TYPE_ASSIGNMENT_OP(%=);
 #undef INT_TYPE_ASSIGNMENT_OP
 
+  ThisType& operator=(ValueType arg_value) {
+    value_ = arg_value;
+    return *this;
+  }
+
  private:
   // The integer value of type ValueType.
   ValueType value_;
-};
+
+  COMPILE_ASSERT(std::is_integral<ValueType>::value,
+                 invalid_integer_type_for_id_type_);
+} ATTRIBUTE_PACKED;
 
 // -- NON-MEMBER STREAM OPERATORS ----------------------------------------------
 // We provide the << operator, primarily for logging purposes.  Currently, there
@@ -260,32 +295,28 @@ std::ostream& operator<<(std::ostream& os,  // NOLINT
 // -- NON-MEMBER ARITHMETIC OPERATORS ------------------------------------------
 // We support only the +, -, *, and / operators with the same IntType and
 // ValueType types.  The reason is to allow simple manipulation on these IDs
-// when used as indices in std::vectors and arrays.
+// when used as indices in vectors and arrays.
 //
 // NB: Although it is possible to do IntType * IntType and IntType / IntType,
 // it is probably non-sensical from a dimensionality analysis perspective.
-#define INT_TYPE_ARITHMETIC_OP(op)                                   \
-  template <typename IntTypeName, typename ValueType>                \
-  static inline IntType<IntTypeName, ValueType> operator op(         \
-      IntType<IntTypeName, ValueType> id_1,                          \
-      IntType<IntTypeName, ValueType> id_2) {                        \
-    id_1 op## = id_2.value();                                        \
-    return id_1;                                                     \
-  }                                                                  \
-  template <typename IntTypeName, typename ValueType>                \
-  static inline IntType<IntTypeName, ValueType> operator op(         \
-      IntType<IntTypeName, ValueType> id,                            \
-      typename IntType<IntTypeName, ValueType>::ValueType arg_val) { \
-    id op## = arg_val;                                               \
-    return id;                                                       \
-  }                                                                  \
-  template <typename IntTypeName, typename ValueType>                \
-  static inline IntType<IntTypeName, ValueType> operator op(         \
-      typename IntType<IntTypeName, ValueType>::ValueType arg_val,   \
-      IntType<IntTypeName, ValueType> id) {                          \
-    IntType<IntTypeName, ValueType> obj(arg_val);                    \
-    obj op## = id.value();                                           \
-    return obj;                                                      \
+#define INT_TYPE_ARITHMETIC_OP(op)                                        \
+  template <typename IntTypeName, typename ValueType>                     \
+  constexpr IntType<IntTypeName, ValueType> operator op(                  \
+      IntType<IntTypeName, ValueType> id_1,                               \
+      IntType<IntTypeName, ValueType> id_2) {                             \
+    return IntType<IntTypeName, ValueType>(id_1.value() op id_2.value()); \
+  }                                                                       \
+  template <typename IntTypeName, typename ValueType>                     \
+  constexpr IntType<IntTypeName, ValueType> operator op(                  \
+      IntType<IntTypeName, ValueType> id,                                 \
+      typename IntType<IntTypeName, ValueType>::ValueType arg_val) {      \
+    return IntType<IntTypeName, ValueType>(id.value() op arg_val);        \
+  }                                                                       \
+  template <typename IntTypeName, typename ValueType>                     \
+  constexpr IntType<IntTypeName, ValueType> operator op(                  \
+      typename IntType<IntTypeName, ValueType>::ValueType arg_val,        \
+      IntType<IntTypeName, ValueType> id) {                               \
+    return IntType<IntTypeName, ValueType>(arg_val op id.value());        \
   }
 INT_TYPE_ARITHMETIC_OP(+);
 INT_TYPE_ARITHMETIC_OP(-);
@@ -302,23 +333,24 @@ INT_TYPE_ARITHMETIC_OP(%);
 //   IntType<IntTypeName, ValueType> OP IntType<IntTypeName, ValueType>
 //   IntType<IntTypeName, ValueType> OP ValueType
 //   ValueType OP IntType<IntTypeName, ValueType>
-#define INT_TYPE_COMPARISON_OP(op)                                       \
-  template <typename IntTypeName, typename ValueType>                    \
-  static inline bool operator op(IntType<IntTypeName, ValueType> id_1,   \
-                                 IntType<IntTypeName, ValueType> id_2) { \
-    return id_1.value() op id_2.value();                                 \
-  }                                                                      \
-  template <typename IntTypeName, typename ValueType>                    \
-  static inline bool operator op(                                        \
-      IntType<IntTypeName, ValueType> id,                                \
-      typename IntType<IntTypeName, ValueType>::ValueType val) {         \
-    return id.value() op val;                                            \
-  }                                                                      \
-  template <typename IntTypeName, typename ValueType>                    \
-  static inline bool operator op(                                        \
-      typename IntType<IntTypeName, ValueType>::ValueType val,           \
-      IntType<IntTypeName, ValueType> id) {                              \
-    return val op id.value();                                            \
+#define INT_TYPE_COMPARISON_OP(op)                               \
+  template <typename IntTypeName, typename ValueType>            \
+  static inline constexpr bool operator op(                      \
+      IntType<IntTypeName, ValueType> id_1,                      \
+      IntType<IntTypeName, ValueType> id_2) {                    \
+    return id_1.value() op id_2.value();                         \
+  }                                                              \
+  template <typename IntTypeName, typename ValueType>            \
+  static inline constexpr bool operator op(                      \
+      IntType<IntTypeName, ValueType> id,                        \
+      typename IntType<IntTypeName, ValueType>::ValueType val) { \
+    return id.value() op val;                                    \
+  }                                                              \
+  template <typename IntTypeName, typename ValueType>            \
+  static inline constexpr bool operator op(                      \
+      typename IntType<IntTypeName, ValueType>::ValueType val,   \
+      IntType<IntTypeName, ValueType> id) {                      \
+    return val op id.value();                                    \
   }
 INT_TYPE_COMPARISON_OP(==);  // NOLINT
 INT_TYPE_COMPARISON_OP(!=);  // NOLINT
@@ -328,13 +360,13 @@ INT_TYPE_COMPARISON_OP(>);   // NOLINT
 INT_TYPE_COMPARISON_OP(>=);  // NOLINT
 #undef INT_TYPE_COMPARISON_OP
 
+}  // namespace sat
+
+// Allows it to be used as a key to hashable containers.
 namespace std {
 template <typename IntTypeName, typename ValueType>
-struct hash<IntType<IntTypeName, ValueType> > {
-  size_t operator()(const IntType<IntTypeName, ValueType>& idx) const {
-    return hash<ValueType>()(idx.value());
-  }
-};
+struct hash<sat::IntType<IntTypeName, ValueType> >
+    : sat::IntType<IntTypeName, ValueType>::Hasher {};
 }  // namespace std
 
-#endif  // SATTOOLS_INTTYPE_H_
+#endif  // OR_TOOLS_BASE_INT_TYPE_H_
