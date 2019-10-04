@@ -63,8 +63,8 @@ class Solver {
 
 
     struct Counters {
-        uint64_t num_branches;
-        uint64_t num_failures;
+        uint64_t num_branches = 0;
+        uint64_t num_failures = 0;
     };
     Counters _counters;
 
