@@ -3,7 +3,8 @@
 #ifndef SATTOOLS_RESTARTPOLICIES_H_
 #define SATTOOLS_RESTARTPOLICIES_H_
 
-#include "sattools/RestartPolicyLuby.h"
+#include "sattools/LubyRestartPolicy.h"
+#include "sattools/NoRestartPolicy.h"
 
 #endif  // SATTOOLS_DECISIONPOLICIES_H_
 /*

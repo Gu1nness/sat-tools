@@ -9,10 +9,9 @@ namespace sat {
         public:
             explicit RestartPolicy() {}
             virtual ~RestartPolicy() {}
-            virtual bool shouldRestart(unsigned int progress) = 0;
+            virtual bool shouldRestart() = 0;
+            virtual void onConflict() {}
     };
 }
 
 #endif // SATTOOLS_RESTARTPOLICY_H_
-
-
