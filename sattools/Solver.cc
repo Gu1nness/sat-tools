@@ -74,7 +74,7 @@ Solver::Status Solver::solve() {
                                              &reason_used_to_infer_the_conflict,
                                              &learnt);
             backtrack(computeBacktrackLevel(learnt));
-            Clause *clause = Clause::create(learnt, true);
+            Clause *clause = Clause::create(learnt, true, _trail);
             _model->addClause(clause);
             _propagator.addClause(clause, &_trail);
 

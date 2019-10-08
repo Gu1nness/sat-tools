@@ -12,7 +12,10 @@
 #include "sattools/Clause.h"
 #include "sattools/Propagator.h"
 
+
 namespace sat {
+
+class Clause;
 
 // Forward declaration
 class Propagator;

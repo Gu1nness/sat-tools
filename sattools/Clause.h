@@ -6,16 +6,23 @@
 
 #include <string>
 #include <vector>
+#include <unordered_set>
 
+#include "sattools/Trail.h"
 #include "sattools/Literal.h"
 #include "sattools/Logging.h"
 
 namespace sat {
 
+class Trail;
+struct AssignmentInfo;
+
 class Clause {
  public:
     static Clause* create(const std::vector<Literal>& literals,
                           bool is_redundant);
+    static Clause* create(const std::vector<Literal>& literals,
+                          bool is_redundant, Trail& trail);
 
     // Non-sized delete because this is a tail-padded class.
     void operator delete(void* p) {
@@ -37,12 +44,16 @@ class Clause {
     // Clause is no more usable after.
     void lazyDetach() { _size = 0; }
 
+    // Update LBD value.
+    void updateLBD(Trail& trail);
+
     std::string debugString() const;
 
  private:
     // Packed data, use 32 bits
     bool _is_redundant : 2;  // true => leanrt, false => problem clause
     unsigned int _size : 30;
+    unsigned int _lbd = 0;
 
     // This class store the literals inline, and _literals mark the starts of
     // the variable length portion.

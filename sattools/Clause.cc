@@ -2,6 +2,8 @@
 
 # include "sattools/Clause.h"
 
+class Clause;
+
 namespace sat {
 
 // static
@@ -17,6 +19,13 @@ Clause* Clause::create(const std::vector<Literal>& literals,
 
     clause->_is_redundant = is_redundant;
 
+    return clause;
+}
+
+Clause* Clause::create(const std::vector<Literal>& literals,
+                       bool is_redundant, Trail& trail) {
+    Clause* clause = create(literals, is_redundant);
+    clause->updateLBD(trail);
     return clause;
 }
 
@@ -36,6 +45,15 @@ std::string Clause::debugString() const {
     return str;
 }
 
+// Update LBD value.
+void Clause::updateLBD(Trail& trail) {
+    std::unordered_set<unsigned int> decision_levels;
+    for (Literal literal : *this) {
+        const AssignmentInfo& assignment_info = trail.info(literal.variable());
+        decision_levels.insert(assignment_info.level);
+    }
+    _lbd = decision_levels.size();
+}
 
 }  // namespace sat
 /*

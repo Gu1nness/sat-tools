@@ -18,6 +18,7 @@ namespace sat {
 
 // Forward declaration
 class Trail;
+class Clause;
 
 class Propagator {
  public:
